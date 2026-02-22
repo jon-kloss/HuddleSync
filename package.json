@@ -1,0 +1,19 @@
+{
+  "name": "huddlesync",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AI-Powered Team Huddle Recorder & Summarizer",
+  "workspaces": [
+    "backend",
+    "mobile"
+  ],
+  "scripts": {
+    "backend:dev": "cd backend && npm run dev",
+    "mobile:dev": "cd mobile && npx expo start",
+    "db:migrate": "cd backend && npx prisma migrate dev",
+    "db:generate": "cd backend && npx prisma generate",
+    "db:seed": "cd backend && npx prisma db seed",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down"
+  }
+}

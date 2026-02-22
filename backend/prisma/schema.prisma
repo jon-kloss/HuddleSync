@@ -1,0 +1,155 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  MEMBER
+  GUEST
+}
+
+enum SessionStatus {
+  ACTIVE
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model Team {
+  team_id       String   @id @default(uuid()) @db.Uuid
+  name          String
+  created_at    DateTime @default(now())
+  owner_user_id String   @db.Uuid
+
+  owner    User             @relation("TeamOwner", fields: [owner_user_id], references: [user_id])
+  members  User[]           @relation("TeamMembers")
+  sessions HuddleSession[]
+
+  @@index([owner_user_id])
+  @@index([created_at])
+}
+
+model User {
+  user_id         String   @id @default(uuid()) @db.Uuid
+  display_name    String
+  email           String   @unique
+  password_hash   String
+  voice_embedding Bytes?
+  team_id         String?  @db.Uuid
+  role            Role     @default(MEMBER)
+  created_at      DateTime @default(now())
+
+  team              Team?            @relation("TeamMembers", fields: [team_id], references: [team_id], onDelete: SetNull)
+  owned_teams       Team[]           @relation("TeamOwner")
+  started_sessions  HuddleSession[]  @relation("SessionStarter")
+  speaker_segments  SpeakerSegment[] @relation("SegmentUser")
+  speaker_summaries SpeakerSummary[] @relation("SpeakerSummaryUser")
+
+  @@index([team_id])
+  @@index([email])
+  @@index([created_at])
+}
+
+model HuddleSession {
+  session_id String        @id @default(uuid()) @db.Uuid
+  team_id    String        @db.Uuid
+  started_by String        @db.Uuid
+  started_at DateTime      @default(now())
+  ended_at   DateTime?
+  status     SessionStatus @default(ACTIVE)
+
+  team         Team         @relation(fields: [team_id], references: [team_id], onDelete: Cascade)
+  starter      User         @relation("SessionStarter", fields: [started_by], references: [user_id])
+  audio_chunks AudioChunk[]
+  transcript   Transcript?
+  summaries    Summary[]
+
+  @@index([team_id])
+  @@index([started_by])
+  @@index([started_at])
+  @@index([status])
+}
+
+model AudioChunk {
+  chunk_id     String   @id @default(uuid()) @db.Uuid
+  session_id   String   @db.Uuid
+  sequence_num Int
+  s3_key       String
+  duration_ms  Int
+  created_at   DateTime @default(now())
+
+  session HuddleSession @relation(fields: [session_id], references: [session_id], onDelete: Cascade)
+
+  @@index([session_id])
+  @@index([session_id, sequence_num])
+  @@index([created_at])
+}
+
+model Transcript {
+  transcript_id String   @id @default(uuid()) @db.Uuid
+  session_id    String   @unique @db.Uuid
+  full_text     Json     @db.JsonB
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  session          HuddleSession    @relation(fields: [session_id], references: [session_id], onDelete: Cascade)
+  speaker_segments SpeakerSegment[]
+
+  @@index([session_id])
+  @@index([created_at])
+}
+
+model SpeakerSegment {
+  segment_id    String  @id @default(uuid()) @db.Uuid
+  transcript_id String  @db.Uuid
+  speaker_label String
+  user_id       String? @db.Uuid
+  start_ms      Int
+  end_ms        Int
+  text          String
+
+  transcript Transcript @relation(fields: [transcript_id], references: [transcript_id], onDelete: Cascade)
+  user       User?      @relation("SegmentUser", fields: [user_id], references: [user_id], onDelete: SetNull)
+
+  @@index([transcript_id])
+  @@index([user_id])
+  @@index([speaker_label])
+  @@index([start_ms, end_ms])
+}
+
+model Summary {
+  summary_id   String   @id @default(uuid()) @db.Uuid
+  session_id   String   @db.Uuid
+  generated_at DateTime @default(now())
+  content      Json     @db.JsonB
+  is_final     Boolean  @default(false)
+
+  session           HuddleSession    @relation(fields: [session_id], references: [session_id], onDelete: Cascade)
+  speaker_summaries SpeakerSummary[]
+
+  @@index([session_id])
+  @@index([generated_at])
+}
+
+model SpeakerSummary {
+  speaker_summary_id String   @id @default(uuid()) @db.Uuid
+  summary_id         String   @db.Uuid
+  user_id            String?  @db.Uuid
+  speaker_label      String
+  yesterday          String
+  today              String
+  blockers           String[]
+  action_items       String[]
+
+  summary Summary @relation(fields: [summary_id], references: [summary_id], onDelete: Cascade)
+  user    User?   @relation("SpeakerSummaryUser", fields: [user_id], references: [user_id], onDelete: SetNull)
+
+  @@index([summary_id])
+  @@index([user_id])
+  @@index([speaker_label])
+}
