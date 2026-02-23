@@ -2,7 +2,7 @@ import { Audio } from "expo-av";
 import * as FileSystem from "expo-file-system";
 import { Config } from "../constants/config";
 
-type AudioChunkCallback = (data: string, sequenceNum: number) => void;
+type AudioChunkCallback = (data: string, sequenceNum: number, tempFileUri: string) => void;
 
 export class AudioCaptureService {
   private recording: Audio.Recording | null = null;
@@ -135,10 +135,7 @@ export class AudioCaptureService {
         });
 
         this.sequenceNum += 1;
-        this.onChunkCallback?.(base64Data, this.sequenceNum);
-
-        // Clean up temp file
-        await FileSystem.deleteAsync(uri, { idempotent: true });
+        this.onChunkCallback?.(base64Data, this.sequenceNum, uri);
       }
     } catch (err) {
       console.error("[Audio] Failed to capture chunk:", err);

@@ -2,7 +2,6 @@ import { create } from "zustand";
 import { sessionsApi } from "../services/api";
 import { WebSocketService } from "../services/websocket";
 import { AudioCaptureService } from "../services/audio";
-import { AudioStorageService } from "../services/audioStorage";
 import type { HuddleSession, TranscriptSegment, HuddleSummary, SpeakerDetection } from "../types";
 
 interface SessionState {
@@ -30,7 +29,6 @@ interface SessionState {
 
 const wsService = WebSocketService.getInstance();
 const audioService = new AudioCaptureService();
-const audioStorage = new AudioStorageService();
 
 export const useSessionStore = create<SessionState>((set, get) => ({
   currentSession: null,
@@ -47,11 +45,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   startSession: async (teamId, token) => {
     const session = await sessionsApi.create(teamId);
 
-    // Connect WebSocket
     wsService.connect(token, session.session_id);
     wsService.sendSessionControl("start");
 
-    // Set up WebSocket listeners
     wsService.onTranscriptUpdate((data) => {
       get().addTranscriptSegment(data.segments);
     });
@@ -62,27 +58,13 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       get().updateSummary(data.summary);
     });
 
-    // Ensure local audio directory exists for this session
-    await audioStorage.ensureSessionDir(session.session_id);
-
-    // Set up audio capture
-    audioService.onAudioChunk(async (base64Data, seqNum, tempFileUri) => {
-      // Send over WebSocket for backend processing
-      const buffer = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
-      wsService.sendAudioChunk(buffer.buffer, seqNum, Date.now());
+    audioService.onAudioChunk((buffer, seqNum) => {
+      wsService.sendAudioChunk(buffer, seqNum, Date.now());
       set((s) => ({ chunkCount: s.chunkCount + 1 }));
-
-      // Save chunk to device storage
-      try {
-        await audioStorage.saveChunk(session.session_id, seqNum, tempFileUri);
-      } catch (err) {
-        console.error("[Session] Failed to save audio chunk locally:", err);
-      }
     });
 
     await audioService.startRecording();
 
-    // Start duration timer
     const durationInterval = setInterval(() => {
       set((s) => ({ duration: s.duration + 1 }));
     }, 1000);
@@ -105,7 +87,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   endSession: async () => {
     const { currentSession, durationInterval } = get();
 
-    await audioService.stopRecording();
+    audioService.stopRecording();
     wsService.sendSessionControl("end");
 
     if (currentSession) {
@@ -114,7 +96,6 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
     if (durationInterval) clearInterval(durationInterval);
 
-    // Wait briefly for final summary before disconnecting
     setTimeout(() => {
       wsService.disconnect();
     }, 5000);

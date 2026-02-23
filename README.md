@@ -92,7 +92,7 @@ cp backend/.env.example backend/.env
 Edit `backend/.env` and fill in your API keys:
 
 ```env
-DATABASE_URL=postgresql://huddlesync:huddlesync@localhost:5432/huddlesync
+DATABASE_URL=postgresql://huddlesync:huddlesync_dev@localhost:5432/huddlesync
 REDIS_URL=redis://localhost:6379
 
 JWT_SECRET=<generate-a-random-secret>

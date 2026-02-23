@@ -5,11 +5,14 @@
   "description": "AI-Powered Team Huddle Recorder & Summarizer",
   "workspaces": [
     "backend",
-    "mobile"
+    "web"
   ],
   "scripts": {
     "backend:dev": "cd backend && npm run dev",
-    "mobile:dev": "cd mobile && npx expo start",
+    "web:dev": "cd web && npx vite",
+    "dev": "concurrently \"npm run backend:dev\" \"npm run web:dev\"",
+    "build": "cd web && npx vite build",
+    "start": "cd backend && node dist/index.js",
     "db:migrate": "cd backend && npx prisma migrate dev",
     "db:generate": "cd backend && npx prisma generate",
     "db:seed": "cd backend && npx prisma db seed",

@@ -10,12 +10,6 @@ export const config = {
     expiry: process.env.JWT_EXPIRY || "15m",
     refreshTokenExpiry: process.env.REFRESH_TOKEN_EXPIRY || "7d",
   },
-  aws: {
-    region: process.env.AWS_REGION || "us-east-1",
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
-    s3Bucket: process.env.S3_BUCKET || "",
-  },
   anthropicApiKey: process.env.ANTHROPIC_API_KEY || "",
   whisperApiKey: process.env.WHISPER_API_KEY || "",
   diarizationServiceUrl: process.env.DIARIZATION_SERVICE_URL || "http://localhost:8000",
@@ -46,7 +40,6 @@ export function validateConfig(): void {
     const productionRequired = [
       { key: "ANTHROPIC_API_KEY", value: config.anthropicApiKey },
       { key: "WHISPER_API_KEY", value: config.whisperApiKey },
-      { key: "S3_BUCKET", value: config.aws.s3Bucket },
     ];
     const missingProd = productionRequired.filter((item) => !item.value);
     if (missingProd.length > 0) {

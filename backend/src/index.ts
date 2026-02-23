@@ -1,4 +1,6 @@
 import express from "express";
+import path from "path";
+import { fileURLToPath } from "url";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import cors from "cors";
@@ -30,7 +32,7 @@ const io = new Server(httpServer, {
 });
 
 // Middleware
-app.use(helmet());
+app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({ origin: config.corsOrigin, credentials: true }));
 app.use(morgan(config.isDevelopment ? "dev" : "combined"));
 app.use(express.json());
@@ -49,6 +51,14 @@ app.use("/api/v1/users", userRoutes);
 
 // WebSocket setup
 setupWebSocket(io);
+
+// Serve web frontend in production
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const webDistPath = path.join(__dirname, "../../web/dist");
+app.use(express.static(webDistPath));
+app.get("*", (_req, res) => {
+  res.sendFile(path.join(webDistPath, "index.html"));
+});
 
 // Global error handler (must be last)
 app.use(globalErrorHandler);
