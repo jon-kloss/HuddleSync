@@ -50,8 +50,8 @@ You must respond with valid JSON matching this schema:
     {
       "speakerLabel": "string (the speaker identifier)",
       "name": "string or null (matched name if known)",
-      "yesterday": "string (what they did yesterday/previously)",
-      "today": "string (what they plan to do today)",
+      "yesterday": "string (ONLY if the speaker explicitly mentions something they did yesterday or previously — otherwise leave as empty string)",
+      "today": "string (what they are working on — assume everything discussed is about today unless the speaker explicitly says otherwise)",
       "blockers": ["array of blocker strings"],
       "actionItems": ["array of action item strings"],
       "confidence": "number 0-1 (confidence in speaker attribution)"
@@ -59,7 +59,7 @@ You must respond with valid JSON matching this schema:
   ]
 }
 
-If a speaker hasn't mentioned a category (yesterday, today, blockers), use an empty string or empty array. This is an incremental summary — the meeting may still be in progress.`,
+IMPORTANT: Default everything to "today" unless the speaker explicitly references yesterday or a past date. Only populate the "yesterday" field if they clearly distinguish past work from current work. If a speaker hasn't mentioned a category, use an empty string or empty array. This is an incremental summary — the meeting may still be in progress.`,
       messages: [
         {
           role: "user",
@@ -90,8 +90,8 @@ You must respond with valid JSON matching this schema:
     {
       "speakerLabel": "string (the speaker identifier)",
       "name": "string or null (matched name if known)",
-      "yesterday": "string (comprehensive summary of what they did yesterday/previously)",
-      "today": "string (comprehensive summary of what they plan to do today)",
+      "yesterday": "string (ONLY if the speaker explicitly mentions something they did yesterday or previously — otherwise leave as empty string)",
+      "today": "string (comprehensive summary of what they are working on — assume everything discussed is about today unless the speaker explicitly says otherwise)",
       "blockers": ["array of blocker strings"],
       "actionItems": ["array of action item strings"],
       "confidence": "number 0-1 (confidence in speaker attribution)"
@@ -99,7 +99,7 @@ You must respond with valid JSON matching this schema:
   ]
 }
 
-Be thorough — this is the final record. Flag any segments where speaker attribution is uncertain with a lower confidence score. If speakers reference each other, note cross-references in action items.`,
+IMPORTANT: Default everything to "today" unless the speaker explicitly references yesterday or a past date. Only populate the "yesterday" field if they clearly distinguish past work from current work. Be thorough — this is the final record. Flag any segments where speaker attribution is uncertain with a lower confidence score. If speakers reference each other, note cross-references in action items.`,
       messages: [
         {
           role: "user",

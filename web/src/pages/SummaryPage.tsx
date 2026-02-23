@@ -7,6 +7,55 @@ import type { SpeakerUpdate, HuddleSummary } from "../types";
 
 const SPEAKER_COLORS = ["#4A90D9", "#27AE60", "#E67E22", "#9B59B6", "#E74C3C", "#1ABC9C"];
 
+function CopyButton({ getText }: { getText: () => string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(getText());
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // fallback
+      const textarea = document.createElement("textarea");
+      textarea.value = getText();
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textarea);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  return (
+    <button className="btn-copy" onClick={handleCopy} title="Copy to clipboard">
+      {copied ? "Copied!" : "Copy"}
+    </button>
+  );
+}
+
+function speakerToText(speaker: SpeakerUpdate): string {
+  const name = speaker.name || speaker.speakerLabel;
+  const lines: string[] = [`${name}:`];
+  if (speaker.yesterday) lines.push(`  Yesterday: ${speaker.yesterday}`);
+  if (speaker.today) lines.push(`  Today: ${speaker.today}`);
+  if (speaker.blockers.length > 0) {
+    lines.push(`  Blockers:`);
+    speaker.blockers.forEach((b) => lines.push(`    - ${b}`));
+  }
+  if (speaker.actionItems.length > 0) {
+    lines.push(`  Action Items:`);
+    speaker.actionItems.forEach((a) => lines.push(`    - ${a}`));
+  }
+  return lines.join("\n");
+}
+
+function allSpeakersToText(speakers: SpeakerUpdate[]): string {
+  return speakers.map(speakerToText).join("\n\n");
+}
+
 function SpeakerCard({ speaker, index }: { speaker: SpeakerUpdate; index: number }) {
   const [expanded, setExpanded] = useState(true);
   const color = SPEAKER_COLORS[index % SPEAKER_COLORS.length];
@@ -33,7 +82,8 @@ function SpeakerCard({ speaker, index }: { speaker: SpeakerUpdate; index: number
             {Math.round(speaker.confidence * 100)}% confidence
           </span>
         </div>
-        <span className="chevron">{expanded ? "▲" : "▼"}</span>
+        <CopyButton getText={() => speakerToText(speaker)} />
+        <span className="chevron">{expanded ? "\u25B2" : "\u25BC"}</span>
       </div>
 
       {expanded && (
@@ -41,7 +91,7 @@ function SpeakerCard({ speaker, index }: { speaker: SpeakerUpdate; index: number
           {speaker.yesterday && (
             <div className="update-section">
               <div className="update-header">
-                <span className="update-icon">◀</span>
+                <span className="update-icon">{"\u25C0"}</span>
                 <span className="update-label">Yesterday</span>
               </div>
               <p className="update-text">{speaker.yesterday}</p>
@@ -51,7 +101,7 @@ function SpeakerCard({ speaker, index }: { speaker: SpeakerUpdate; index: number
           {speaker.today && (
             <div className="update-section">
               <div className="update-header">
-                <span className="update-icon">▶</span>
+                <span className="update-icon">{"\u25B6"}</span>
                 <span className="update-label today">Today</span>
               </div>
               <p className="update-text">{speaker.today}</p>
@@ -61,7 +111,7 @@ function SpeakerCard({ speaker, index }: { speaker: SpeakerUpdate; index: number
           {speaker.blockers.length > 0 && (
             <div className="update-section">
               <div className="update-header">
-                <span className="update-icon">⚠</span>
+                <span className="update-icon">{"\u26A0"}</span>
                 <span className="update-label blockers">Blockers</span>
               </div>
               {speaker.blockers.map((b, i) => (
@@ -76,12 +126,12 @@ function SpeakerCard({ speaker, index }: { speaker: SpeakerUpdate; index: number
           {speaker.actionItems.length > 0 && (
             <div className="update-section">
               <div className="update-header">
-                <span className="update-icon">✓</span>
+                <span className="update-icon">{"\u2713"}</span>
                 <span className="update-label actions">Action Items</span>
               </div>
               {speaker.actionItems.map((a, i) => (
                 <div key={i} className="action-row">
-                  <span className="action-checkbox">☐</span>
+                  <span className="action-checkbox">{"\u2610"}</span>
                   <span>{a}</span>
                 </div>
               ))}
@@ -89,6 +139,52 @@ function SpeakerCard({ speaker, index }: { speaker: SpeakerUpdate; index: number
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function CombinedSummary({ speakers }: { speakers: SpeakerUpdate[] }) {
+  return (
+    <div className="combined-summary">
+      <div className="combined-summary-header">
+        <h3>Full Summary</h3>
+        <CopyButton getText={() => allSpeakersToText(speakers)} />
+      </div>
+      <div className="combined-summary-body">
+        {speakers.map((speaker, i) => {
+          const name = speaker.name || speaker.speakerLabel;
+          const color = SPEAKER_COLORS[i % SPEAKER_COLORS.length];
+          return (
+            <div key={speaker.speakerLabel + i} className="combined-speaker-block">
+              <div className="combined-speaker-name" style={{ color }}>
+                {name}
+              </div>
+              <ul className="combined-list">
+                {speaker.yesterday && (
+                  <li>
+                    <strong>Yesterday:</strong> {speaker.yesterday}
+                  </li>
+                )}
+                {speaker.today && (
+                  <li>
+                    <strong>Today:</strong> {speaker.today}
+                  </li>
+                )}
+                {speaker.blockers.map((b, j) => (
+                  <li key={`b${j}`} className="combined-blocker">
+                    <strong>Blocker:</strong> {b}
+                  </li>
+                ))}
+                {speaker.actionItems.map((a, j) => (
+                  <li key={`a${j}`} className="combined-action">
+                    <strong>Action:</strong> {a}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -149,7 +245,7 @@ export function SummaryPage() {
           </p>
         )}
         <div className="meeting-stats">
-          <span className="stat-badge">👥 {summary.speakers.length} speakers</span>
+          <span className="stat-badge">{summary.speakers.length} speakers</span>
         </div>
       </div>
 
@@ -157,12 +253,14 @@ export function SummaryPage() {
         <SpeakerCard key={speaker.speakerLabel + i} speaker={speaker} index={i} />
       ))}
 
+      <CombinedSummary speakers={summary.speakers} />
+
       <button
         className="transcript-toggle"
         onClick={() => setShowTranscript(!showTranscript)}
       >
-        📄 {showTranscript ? "Hide Full Transcript" : "View Full Transcript"}{" "}
-        {showTranscript ? "▲" : "▼"}
+        {showTranscript ? "Hide Full Transcript" : "View Full Transcript"}{" "}
+        {showTranscript ? "\u25B2" : "\u25BC"}
       </button>
 
       {showTranscript && (
