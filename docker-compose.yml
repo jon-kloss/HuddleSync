@@ -31,6 +31,28 @@ services:
       timeout: 5s
       retries: 5
 
+  diarization:
+    build:
+      context: ./diarization
+      dockerfile: Dockerfile
+    container_name: huddlesync-diarization
+    ports:
+      - "8000:8000"
+    environment:
+      - HF_TOKEN=${HF_TOKEN}
+      - DEVICE=cpu
+      - MODEL_NAME=pyannote/speaker-diarization-3.1
+      - EMBEDDING_MODEL=pyannote/embedding
+    volumes:
+      - diarization_data:/data/speakers
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
 volumes:
   postgres_data:
   redis_data:
+  diarization_data:

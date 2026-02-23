@@ -27,6 +27,18 @@ interface WhisperVerboseResponse {
   }>;
 }
 
+const MIME_TO_EXT: Record<string, string> = {
+  "audio/webm;codecs=opus": ".webm",
+  "audio/webm": ".webm",
+  "audio/mp4": ".mp4",
+  "audio/wav": ".wav",
+  "audio/mpeg": ".mp3",
+};
+
+function getExtensionForMime(mimeType: string): string {
+  return MIME_TO_EXT[mimeType] ?? ".webm";
+}
+
 const DEFAULT_CONFIG: TranscriptionConfig = {
   apiKey: process.env.WHISPER_API_KEY ?? "",
   model: "whisper-1",
@@ -41,19 +53,22 @@ export class TranscriptionService {
     this.config = { ...DEFAULT_CONFIG, ...config };
   }
 
-  async transcribe(audioBuffer: Buffer, language?: string): Promise<TranscriptionResult> {
+  async transcribe(audioBuffer: Buffer, language?: string, mimeType: string = "audio/webm"): Promise<TranscriptionResult> {
     if (!audioBuffer || audioBuffer.length === 0) {
       throw new TranscriptionError("audioBuffer must not be empty");
     }
 
     const url = `${this.config.baseUrl}/audio/transcriptions`;
     const formData = new FormData();
-    const blob = new Blob([new Uint8Array(audioBuffer)], { type: "audio/wav" });
-    formData.append("file", blob, "audio.wav");
+    const ext = getExtensionForMime(mimeType);
+    const blob = new Blob([new Uint8Array(audioBuffer)], { type: mimeType });
+    formData.append("file", blob, `audio${ext}`);
     formData.append("model", this.config.model);
     formData.append("response_format", "verbose_json");
     formData.append("timestamp_granularities[]", "word");
     if (language) formData.append("language", language);
+
+    console.log(`[Transcription] Sending ${audioBuffer.length} bytes to Whisper API (file=audio${ext}, mime=${mimeType}, apiKey=${this.config.apiKey ? "set" : "MISSING"})`);
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.config.timeoutMs);
@@ -68,10 +83,12 @@ export class TranscriptionService {
 
       if (!response.ok) {
         const body = await response.text().catch(() => "<unreadable>");
+        console.error(`[Transcription] Whisper API error ${response.status}: ${body}`);
         throw new TranscriptionError(`Whisper API responded with ${response.status}: ${body}`);
       }
 
       const raw: WhisperVerboseResponse = await response.json();
+      console.log(`[Transcription] Whisper returned: "${raw.text.substring(0, 100)}..." (${raw.words?.length ?? 0} words)`);
       return this.normaliseResponse(raw);
     } catch (error: unknown) {
       if (error instanceof TranscriptionError) throw error;

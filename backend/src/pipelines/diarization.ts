@@ -24,6 +24,18 @@ interface RawDiarizationResponse {
   }>;
 }
 
+const MIME_TO_EXT: Record<string, string> = {
+  "audio/webm;codecs=opus": ".webm",
+  "audio/webm": ".webm",
+  "audio/mp4": ".mp4",
+  "audio/wav": ".wav",
+  "audio/mpeg": ".mp3",
+};
+
+function getExtensionForMime(mimeType: string): string {
+  return MIME_TO_EXT[mimeType] ?? ".webm";
+}
+
 const DEFAULT_CONFIG: DiarizationConfig = {
   serviceUrl: process.env.DIARIZATION_SERVICE_URL ?? "http://localhost:8000/diarize",
   similarityThreshold: 0.65,
@@ -37,16 +49,19 @@ export class DiarizationService {
     this.config = { ...DEFAULT_CONFIG, ...config };
   }
 
-  async processChunk(audioBuffer: Buffer, sessionId: string): Promise<DiarizationResult> {
+  async processChunk(audioBuffer: Buffer, sessionId: string, mimeType: string = "audio/webm"): Promise<DiarizationResult> {
     if (!audioBuffer || audioBuffer.length === 0) {
       throw new DiarizationError("audioBuffer must not be empty");
     }
 
     const formData = new FormData();
-    const blob = new Blob([new Uint8Array(audioBuffer)], { type: "audio/wav" });
-    formData.append("audio", blob, "chunk.wav");
+    const ext = getExtensionForMime(mimeType);
+    const blob = new Blob([new Uint8Array(audioBuffer)], { type: mimeType });
+    formData.append("audio", blob, `chunk${ext}`);
     formData.append("session_id", sessionId);
     formData.append("threshold", this.config.similarityThreshold.toString());
+
+    console.log(`[Diarization] Sending ${audioBuffer.length} bytes to ${this.config.serviceUrl} (file=chunk${ext}, mime=${mimeType})`);
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.config.timeoutMs);
@@ -60,10 +75,12 @@ export class DiarizationService {
 
       if (!response.ok) {
         const body = await response.text().catch(() => "<unreadable>");
+        console.error(`[Diarization] Service error ${response.status}: ${body}`);
         throw new DiarizationError(`Diarization service responded with ${response.status}: ${body}`);
       }
 
       const raw: RawDiarizationResponse = await response.json();
+      console.log(`[Diarization] Returned ${raw.segments?.length ?? 0} speaker segments`);
       return this.normaliseResponse(raw);
     } catch (error: unknown) {
       if (error instanceof DiarizationError) throw error;

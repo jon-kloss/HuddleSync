@@ -45,7 +45,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   startSession: async (teamId, token) => {
     const session = await sessionsApi.create(teamId);
 
-    wsService.connect(token, session.session_id);
+    await wsService.connect(token, session.session_id);
     wsService.sendSessionControl("start");
 
     wsService.onTranscriptUpdate((data) => {
@@ -58,8 +58,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       get().updateSummary(data.summary);
     });
 
-    audioService.onAudioChunk((buffer, seqNum) => {
-      wsService.sendAudioChunk(buffer, seqNum, Date.now());
+    audioService.onAudioChunk((buffer, seqNum, mimeType) => {
+      wsService.sendAudioChunk(buffer, seqNum, Date.now(), mimeType);
       set((s) => ({ chunkCount: s.chunkCount + 1 }));
     });
 

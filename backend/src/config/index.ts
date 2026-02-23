@@ -12,7 +12,7 @@ export const config = {
   },
   anthropicApiKey: process.env.ANTHROPIC_API_KEY || "",
   whisperApiKey: process.env.WHISPER_API_KEY || "",
-  diarizationServiceUrl: process.env.DIARIZATION_SERVICE_URL || "http://localhost:8000",
+  diarizationServiceUrl: process.env.DIARIZATION_SERVICE_URL || "http://localhost:8000/diarize",
   corsOrigin: process.env.CORS_ORIGIN || "http://localhost:8081",
   nodeEnv: process.env.NODE_ENV || "development",
 

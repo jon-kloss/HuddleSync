@@ -14,6 +14,11 @@ const CHUNKS_PER_SUMMARY = 12; // ~60 seconds at 5s chunks
 export function setupWebSocket(io: Server): void {
   const sessionManager = new SessionManager();
 
+  console.log(`[WS] Initializing pipeline services...`);
+  console.log(`[WS]   Diarization URL: ${config.diarizationServiceUrl}`);
+  console.log(`[WS]   Whisper API key: ${config.whisperApiKey ? "set (" + config.whisperApiKey.substring(0, 8) + "...)" : "MISSING"}`);
+  console.log(`[WS]   Anthropic API key: ${config.anthropicApiKey ? "set (" + config.anthropicApiKey.substring(0, 8) + "...)" : "MISSING"}`);
+
   const diarization = new DiarizationService({
     serviceUrl: config.diarizationServiceUrl,
   });
@@ -51,13 +56,25 @@ export function setupWebSocket(io: Server): void {
     }
 
     // Handle audio chunks
-    socket.on("audio_chunk", async (data: { audioData: Buffer; sequenceNum: number; timestamp: number }) => {
+    socket.on("audio_chunk", async (data: { audioData: Buffer; sequenceNum: number; timestamp: number; mimeType?: string }) => {
       const session = sessionManager.getSession(sessionId);
-      if (!session || session.isPaused) return;
+      if (!session) {
+        console.warn(`[WS] audio_chunk #${data.sequenceNum} received but NO session state for "${sessionId}" — was session_control "start" sent first?`);
+        return;
+      }
+      if (session.isPaused) {
+        console.log(`[WS] audio_chunk #${data.sequenceNum} ignored — session is paused`);
+        return;
+      }
 
       try {
         const audioBuffer = Buffer.from(data.audioData);
-        const result = await orchestrator.processAudioChunk(audioBuffer, sessionId);
+        const mimeType = data.mimeType || "audio/webm";
+        console.log(`[WS] >>> Processing chunk #${data.sequenceNum} | session=${sessionId} | ${audioBuffer.length} bytes | mime=${mimeType}`);
+
+        const result = await orchestrator.processAudioChunk(audioBuffer, sessionId, mimeType);
+
+        console.log(`[WS] <<< Chunk #${data.sequenceNum} done | ${result.segments.length} transcript segments | ${result.rawDiarization.segments.length} diarization segments | text="${result.rawTranscription.text.substring(0, 80)}..."`);
 
         // Add segments to session state
         sessionManager.addTranscriptSegments(sessionId, result.segments);
@@ -85,8 +102,10 @@ export function setupWebSocket(io: Server): void {
         await updateTranscriptInDb(sessionId, session.transcriptSegments);
 
         // Generate incremental summary every CHUNKS_PER_SUMMARY chunks
+        console.log(`[WS] Chunk count: ${chunkCount} (summary triggers every ${CHUNKS_PER_SUMMARY} chunks, total transcript segments: ${session.transcriptSegments.length})`);
         if (chunkCount % CHUNKS_PER_SUMMARY === 0 && session.transcriptSegments.length > 0) {
           try {
+            console.log(`[WS] >>> Generating incremental summary (chunk ${chunkCount})...`);
             const summary = await orchestrator.generateSummary(
               sessionId,
               session.transcriptSegments,
@@ -94,6 +113,7 @@ export function setupWebSocket(io: Server): void {
               session.teamName,
               session.participants,
             );
+            console.log(`[WS] <<< Incremental summary generated with ${summary.speakers?.length ?? 0} speakers`);
 
             huddle.to(sessionId).emit("summary_update", {
               summary,
@@ -115,13 +135,14 @@ export function setupWebSocket(io: Server): void {
           }
         }
       } catch (err) {
-        console.error("[WS] Audio chunk processing failed:", err);
+        console.error("[WS] Audio chunk processing FAILED:", err);
         socket.emit("error", { message: "Audio processing failed", code: "PROCESSING_ERROR" });
       }
     });
 
     // Handle session control
     socket.on("session_control", async (data: { action: "start" | "pause" | "resume" | "end" }) => {
+      console.log(`[WS] session_control: "${data.action}" for session ${sessionId}`);
       switch (data.action) {
         case "start": {
           try {
@@ -132,6 +153,7 @@ export function setupWebSocket(io: Server): void {
                 starter: { select: { display_name: true } },
               },
             });
+            console.log(`[WS] DB session lookup: ${dbSession ? `found (team="${dbSession.team.name}")` : "NOT FOUND"}`);
 
             if (dbSession) {
               const teamMembers = await prisma.user.findMany({
@@ -145,6 +167,7 @@ export function setupWebSocket(io: Server): void {
                 dbSession.team.name,
                 teamMembers.map((m) => m.display_name),
               );
+              console.log(`[WS] Session state created: team="${dbSession.team.name}", participants=${JSON.stringify(teamMembers.map((m) => m.display_name))}`);
 
               huddle.to(sessionId).emit("session_status", { status: "ACTIVE" });
             }
@@ -170,8 +193,10 @@ export function setupWebSocket(io: Server): void {
         case "end": {
           try {
             const session = sessionManager.getSession(sessionId);
+            console.log(`[WS] Ending session ${sessionId} — ${session ? `${session.transcriptSegments.length} transcript segments, ${session.chunkCount} chunks` : "NO session state found"}`);
             if (session && session.transcriptSegments.length > 0) {
               // Generate final summary
+              console.log(`[WS] >>> Generating FINAL summary...`);
               const finalSummary = await orchestrator.generateSummary(
                 sessionId,
                 session.transcriptSegments,
@@ -204,6 +229,8 @@ export function setupWebSocket(io: Server): void {
                   });
                 }
               }
+
+              console.log(`[WS] <<< Final summary generated with ${finalSummary.speakers?.length ?? 0} speakers`);
 
               huddle.to(sessionId).emit("summary_update", {
                 summary: finalSummary,

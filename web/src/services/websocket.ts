@@ -12,30 +12,34 @@ export class WebSocketService {
     return WebSocketService.instance;
   }
 
-  connect(token: string, sessionId: string): void {
+  connect(token: string, sessionId: string): Promise<void> {
     if (this.socket?.connected) {
       this.disconnect();
     }
 
-    this.socket = io("/huddle", {
-      auth: { token, sessionId },
-      transports: ["websocket"],
-      reconnection: true,
-      reconnectionAttempts: 10,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-    });
+    return new Promise((resolve, reject) => {
+      this.socket = io("/huddle", {
+        auth: { token, sessionId },
+        transports: ["websocket"],
+        reconnection: true,
+        reconnectionAttempts: 10,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+      });
 
-    this.socket.on("connect", () => {
-      console.log("[WS] Connected to huddle session");
-    });
+      this.socket.on("connect", () => {
+        console.log("[WS] Connected to huddle session");
+        resolve();
+      });
 
-    this.socket.on("disconnect", (reason) => {
-      console.log("[WS] Disconnected:", reason);
-    });
+      this.socket.on("disconnect", (reason) => {
+        console.log("[WS] Disconnected:", reason);
+      });
 
-    this.socket.on("connect_error", (err) => {
-      console.error("[WS] Connection error:", err.message);
+      this.socket.on("connect_error", (err) => {
+        console.error("[WS] Connection error:", err.message);
+        reject(err);
+      });
     });
   }
 
@@ -46,9 +50,9 @@ export class WebSocketService {
     }
   }
 
-  sendAudioChunk(audioData: ArrayBuffer, sequenceNum: number, timestamp: number): void {
+  sendAudioChunk(audioData: ArrayBuffer, sequenceNum: number, timestamp: number, mimeType: string): void {
     if (!this.socket?.connected) return;
-    this.socket.emit("audio_chunk", { audioData, sequenceNum, timestamp });
+    this.socket.emit("audio_chunk", { audioData, sequenceNum, timestamp, mimeType });
   }
 
   sendSessionControl(action: "start" | "pause" | "resume" | "end"): void {

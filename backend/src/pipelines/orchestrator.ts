@@ -15,14 +15,14 @@ export class PipelineOrchestrator {
     private readonly summarization: SummarizationService,
   ) {}
 
-  async processAudioChunk(audioBuffer: Buffer, sessionId: string): Promise<ProcessedChunk> {
+  async processAudioChunk(audioBuffer: Buffer, sessionId: string, mimeType: string = "audio/webm"): Promise<ProcessedChunk> {
     // Run diarization and transcription in parallel
     const [diarizationResult, transcriptionResult] = await Promise.all([
-      this.diarization.processChunk(audioBuffer, sessionId).catch((err) => {
+      this.diarization.processChunk(audioBuffer, sessionId, mimeType).catch((err) => {
         console.error("[Orchestrator] Diarization failed, continuing with ASR only:", err.message);
         return { segments: [] } as DiarizationResult;
       }),
-      this.transcription.transcribe(audioBuffer),
+      this.transcription.transcribe(audioBuffer, undefined, mimeType),
     ]);
 
     const segments = this.mergeTranscriptWithDiarization(transcriptionResult, diarizationResult);
