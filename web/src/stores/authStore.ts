@@ -60,14 +60,13 @@ export const useAuthStore = create<AuthState>((set) => ({
   loadStoredAuth: async () => {
     try {
       const accessToken = localStorage.getItem("accessToken");
-      const refreshToken = localStorage.getItem("refreshToken");
-
       if (accessToken) {
         const user = await usersApi.getMe();
+        // Re-read tokens — the interceptor may have refreshed them during getMe()
         set({
           user: user as User,
-          accessToken,
-          refreshToken,
+          accessToken: localStorage.getItem("accessToken"),
+          refreshToken: localStorage.getItem("refreshToken"),
           isAuthenticated: true,
           isLoading: false,
         });

@@ -15,11 +15,15 @@ export function DashboardPage() {
   const [starting, setStarting] = useState(false);
   const [teamName, setTeamName] = useState("");
   const [creatingTeam, setCreatingTeam] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     if (user?.teamId) {
       setLoading(true);
-      loadSessions(user.teamId).finally(() => setLoading(false));
+      setLoadError(false);
+      loadSessions(user.teamId)
+        .catch(() => setLoadError(true))
+        .finally(() => setLoading(false));
     }
   }, [user?.teamId]);
 
@@ -105,6 +109,15 @@ export function DashboardPage() {
         {loading ? (
           <div className="loading-inline">
             <div className="spinner" />
+          </div>
+        ) : loadError ? (
+          <div className="empty-state">
+            <p className="empty-title">Failed to load huddles</p>
+            <p className="empty-subtitle">
+              <button className="btn-text" onClick={() => user?.teamId && loadSessions(user.teamId).then(() => setLoadError(false)).catch(() => {})}>
+                Try again
+              </button>
+            </p>
           </div>
         ) : sessions.length === 0 ? (
           <div className="empty-state">

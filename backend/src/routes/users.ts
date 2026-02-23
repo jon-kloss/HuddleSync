@@ -38,7 +38,13 @@ router.get("/me", async (req: Request, res: Response, next: NextFunction) => {
     });
 
     if (!user) throw new AppError("User not found", 404);
-    res.json(user);
+    res.json({
+      id: user.user_id,
+      email: user.email,
+      displayName: user.display_name,
+      role: user.role,
+      teamId: user.team_id,
+    });
   } catch (err) {
     next(err);
   }

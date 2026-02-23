@@ -16,24 +16,73 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+let isRefreshing = false;
+let failedQueue: Array<{ resolve: (token: string) => void; reject: (err: unknown) => void }> = [];
+
+function processQueue(error: unknown, token: string | null) {
+  for (const prom of failedQueue) {
+    if (token) {
+      prom.resolve(token);
+    } else {
+      prom.reject(error);
+    }
+  }
+  failedQueue = [];
+}
+
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
     if (error.response?.status === 401 && !originalRequest._retry) {
+      if (isRefreshing) {
+        // Queue requests while a refresh is in progress
+        return new Promise((resolve, reject) => {
+          failedQueue.push({
+            resolve: (token: string) => {
+              originalRequest.headers.Authorization = `Bearer ${token}`;
+              resolve(api(originalRequest));
+            },
+            reject,
+          });
+        });
+      }
+
       originalRequest._retry = true;
+      isRefreshing = true;
+
       try {
         const refreshToken = localStorage.getItem("refreshToken");
-        if (refreshToken) {
-          const { data } = await axios.post(`${Config.API_URL}/auth/refresh`, { refreshToken });
-          localStorage.setItem("accessToken", data.accessToken);
-          localStorage.setItem("refreshToken", data.refreshToken);
-          originalRequest.headers.Authorization = `Bearer ${data.accessToken}`;
-          return api(originalRequest);
+        if (!refreshToken) {
+          throw new Error("No refresh token");
         }
-      } catch {
+
+        const { data } = await axios.post(`${Config.API_URL}/auth/refresh`, { refreshToken });
+        localStorage.setItem("accessToken", data.accessToken);
+        localStorage.setItem("refreshToken", data.refreshToken);
+
+        // Update the auth store in-memory state
+        const { useAuthStore } = await import("../stores/authStore");
+        useAuthStore.setState({
+          accessToken: data.accessToken,
+          refreshToken: data.refreshToken,
+        });
+
+        processQueue(null, data.accessToken);
+        originalRequest.headers.Authorization = `Bearer ${data.accessToken}`;
+        return api(originalRequest);
+      } catch (refreshError) {
+        processQueue(refreshError, null);
+
+        // Clear everything and force logout
         localStorage.removeItem("accessToken");
         localStorage.removeItem("refreshToken");
+        const { useAuthStore } = await import("../stores/authStore");
+        useAuthStore.getState().logout();
+
+        return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
       }
     }
     return Promise.reject(error);

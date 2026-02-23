@@ -130,8 +130,13 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 
   loadSessions: async (teamId) => {
-    const response = await sessionsApi.listForTeam(teamId);
-    set({ sessions: response.sessions });
+    try {
+      const response = await sessionsApi.listForTeam(teamId);
+      set({ sessions: response.sessions });
+    } catch (err) {
+      console.error("[SessionStore] Failed to load sessions:", err);
+      // Don't clear sessions on error — keep whatever we had
+    }
   },
 
   reset: () => {
